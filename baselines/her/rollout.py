@@ -62,15 +62,26 @@ class RolloutWorker:
         # generate episodes
         obs, achieved_goals, acts, goals, successes = [], [], [], [], []
         dones = []
-        info_values = [np.empty((self.T - 1, self.rollout_batch_size, self.dims['info_' + key]), np.float32) for key in self.info_keys]
+        info_values = [
+            np.empty(
+                (self.T - 1, self.rollout_batch_size, self.dims[f'info_{key}']),
+                np.float32,
+            )
+            for key in self.info_keys
+        ]
+
         Qs = []
         for t in range(self.T):
             policy_output = self.policy.get_actions(
-                o, ag, self.g,
+                o,
+                ag,
+                self.g,
                 compute_Q=self.compute_Q,
-                noise_eps=self.noise_eps if not self.exploit else 0.,
-                random_eps=self.random_eps if not self.exploit else 0.,
-                use_target_net=self.use_target_net)
+                noise_eps=0.0 if self.exploit else self.noise_eps,
+                random_eps=0.0 if self.exploit else self.random_eps,
+                use_target_net=self.use_target_net,
+            )
+
 
             if self.compute_Q:
                 u, Q = policy_output
@@ -122,7 +133,7 @@ class RolloutWorker:
                        g=goals,
                        ag=achieved_goals)
         for key, value in zip(self.info_keys, info_values):
-            episode['info_{}'.format(key)] = value
+            episode[f'info_{key}'] = value
 
         # stats
         successful = np.array(successes)[-1, :]
@@ -163,7 +174,7 @@ class RolloutWorker:
         logs += [('episode', self.n_episodes)]
 
         if prefix != '' and not prefix.endswith('/'):
-            return [(prefix + '/' + key, val) for key, val in logs]
+            return [(f'{prefix}/{key}', val) for key, val in logs]
         else:
             return logs
 

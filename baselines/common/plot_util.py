@@ -69,9 +69,18 @@ def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
     low = xolds[0] if low is None else low
     high = xolds[-1] if high is None else high
 
-    assert xolds[0] <= low, 'low = {} < xolds[0] = {} - extrapolation not permitted!'.format(low, xolds[0])
-    assert xolds[-1] >= high, 'high = {} > xolds[-1] = {}  - extrapolation not permitted!'.format(high, xolds[-1])
-    assert len(xolds) == len(yolds), 'length of xolds ({}) and yolds ({}) do not match!'.format(len(xolds), len(yolds))
+    assert (
+        xolds[0] <= low
+    ), f'low = {low} < xolds[0] = {xolds[0]} - extrapolation not permitted!'
+
+    assert (
+        xolds[-1] >= high
+    ), f'high = {high} > xolds[-1] = {xolds[-1]}  - extrapolation not permitted!'
+
+    assert len(xolds) == len(
+        yolds
+    ), f'length of xolds ({len(xolds)}) and yolds ({len(yolds)}) do not match!'
+
 
 
     xolds = xolds.astype('float64')
@@ -89,17 +98,14 @@ def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
         xnew = xnews[i]
         sum_y *= interstep_decay
         count_y *= interstep_decay
-        while True:
-            if luoi >= len(xolds):
-                break
+        while luoi < len(xolds):
             xold = xolds[luoi]
-            if xold <= xnew:
-                decay = np.exp(- (xnew - xold) / decay_period)
-                sum_y += decay * yolds[luoi]
-                count_y += decay
-                luoi += 1
-            else:
+            if xold > xnew:
                 break
+            decay = np.exp(- (xnew - xold) / decay_period)
+            sum_y += decay * yolds[luoi]
+            count_y += decay
+            luoi += 1
         sum_ys[i] = sum_y
         count_ys[i] = count_y
 
@@ -181,8 +187,14 @@ def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, ve
                 files[:] = []
                 continue
             monitor_re = re.compile(r'(\d+\.)?(\d+\.)?monitor\.csv')
-            if set(['metadata.json', 'monitor.json', 'progress.json', 'progress.csv']).intersection(files) or \
-               any([f for f in files if monitor_re.match(f)]):  # also match monitor files like 0.1.monitor.csv
+            if {
+                'metadata.json',
+                'monitor.json',
+                'progress.json',
+                'progress.csv',
+            }.intersection(files) or any(
+                f for f in files if monitor_re.match(f)
+            ):  # also match monitor files like 0.1.monitor.csv
                 # used to be uncommented, which means do not go deeper than current directory if any of the data files
                 # are found
                 # dirs[:] = []
@@ -200,21 +212,20 @@ def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, ve
                             result['progress'] = read_csv(progcsv)
                         except pandas.errors.EmptyDataError:
                             print('skipping progress file in ', dirname, 'empty data')
-                    else:
-                        if verbose: print('skipping %s: no progress file'%dirname)
-
+                    elif verbose:
+                        print(f'skipping {dirname}: no progress file')
                 if enable_monitor:
                     try:
                         result['monitor'] = pandas.DataFrame(monitor.load_results(dirname))
                     except monitor.LoadMonitorResultsError:
-                        print('skipping %s: no monitor files'%dirname)
+                        print(f'skipping {dirname}: no monitor files')
                     except Exception as e:
-                        print('exception loading monitor file in %s: %s'%(dirname, e))
+                        print(f'exception loading monitor file in {dirname}: {e}')
 
                 if result.get('monitor') is not None or result.get('progress') is not None:
                     allresults.append(Result(**result))
                     if verbose:
-                        print('successfully loaded %s'%dirname)
+                        print(f'successfully loaded {dirname}')
 
     if verbose: print('loaded %i results'%len(allresults))
     return allresults
@@ -231,10 +242,7 @@ def default_xy_fn(r):
 
 def default_split_fn(r):
     import re
-    # match name between slash and -<digits> at the end of the string
-    # (slash in the beginning or -<digits> in the end or either may be missing)
-    match = re.search(r'[^/-]+(?=(-\d+)?\Z)', r.dirname)
-    if match:
+    if match := re.search(r'[^/-]+(?=(-\d+)?\Z)', r.dirname):
         return match.group(0)
 
 def plot_results(
@@ -301,7 +309,7 @@ def plot_results(
     for result in allresults:
         splitkey = split_fn(result)
         sk2r[splitkey].append(result)
-    assert len(sk2r) > 0
+    assert sk2r
     assert isinstance(resample, int), "0: don't resample. <integer>: that many samples"
     if tiling == 'vertical' or tiling is None:
         nrows = len(sk2r)
@@ -322,7 +330,7 @@ def plot_results(
 
     f, axarr = plt.subplots(nrows, ncols, sharex=False, squeeze=False, figsize=figsize)
 
-    groups = list(set(group_fn(result) for result in allresults))
+    groups = list({group_fn(result) for result in allresults})
 
     default_samples = 512
     if average_group:
@@ -421,7 +429,10 @@ def test_smooth():
     yclean = np.sin(xs)
     ys = yclean + .1 * np.random.randn(yclean.size)
     xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup/ndown)
-    xdown, ydown, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown/ndown)
+    xdown, ydown, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max(), ndown, decay_steps=1
+    )
+
     xsame, ysame, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), norig, decay_steps=norig/ndown)
     plt.plot(xs, ys, label='orig', marker='x')
     plt.plot(xup, yup, label='up', marker='x')

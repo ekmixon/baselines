@@ -46,15 +46,16 @@ def reward_per_episode_test(env_fn, learn_fn, min_avg_reward, n_trials=N_EPISODE
         observations, actions, rewards = rollout(env, model, N_TRIALS)
         rewards = [sum(r) for r in rewards]
         avg_rew = sum(rewards) / N_TRIALS
-        print("Average reward in {} episodes is {}".format(n_trials, avg_rew))
-        assert avg_rew > min_avg_reward, \
-            'average reward in {} episodes ({}) is less than {}'.format(n_trials, avg_rew, min_avg_reward)
+        print(f"Average reward in {n_trials} episodes is {avg_rew}")
+        assert (
+            avg_rew > min_avg_reward
+        ), f'average reward in {n_trials} episodes ({avg_rew}) is less than {min_avg_reward}'
 
 def rollout(env, model, n_trials):
     rewards = []
     actions = []
     observations = []
-    for i in range(n_trials):
+    for _ in range(n_trials):
         obs = env.reset()
         state = model.initial_state if hasattr(model, 'initial_state') else None
         episode_rew = []
@@ -82,9 +83,9 @@ def smoketest(argstr, **kwargs):
     import tempfile
     import subprocess
     import os
-    argstr = 'python -m baselines.run ' + argstr
+    argstr = f'python -m baselines.run {argstr}'
     for key, value in kwargs:
-        argstr += ' --{}={}'.format(key, value)
+        argstr += f' --{key}={value}'
     tempdir = tempfile.mkdtemp()
     env = os.environ.copy()
     env['OPENAI_LOGDIR'] = tempdir

@@ -14,7 +14,9 @@ from baselines.common import tf_util
 
 
 def dims_to_shapes(input_dims):
-    return {key: tuple([val]) if val > 0 else tuple() for key, val in input_dims.items()}
+    return {
+        key: (val,) if val > 0 else tuple() for key, val in input_dims.items()
+    }
 
 
 global DEMO_BUFFER #buffer for demonstrations
@@ -79,7 +81,7 @@ class DDPG(object):
                 continue
             stage_shapes[key] = (None, *input_shapes[key])
         for key in ['o', 'g']:
-            stage_shapes[key + '_2'] = stage_shapes[key]
+            stage_shapes[f'{key}_2'] = stage_shapes[key]
         stage_shapes['r'] = (None,)
         self.stage_shapes = stage_shapes
 
@@ -152,24 +154,25 @@ class DDPG(object):
         u = u.copy()
         ret[0] = u
 
-        if len(ret) == 1:
-            return ret[0]
-        else:
-            return ret
+        return ret[0] if len(ret) == 1 else ret
 
     def init_demo_buffer(self, demoDataFile, update_stats=True): #function that initializes the demo buffer
 
         demoData = np.load(demoDataFile) #load the demonstration data from data file
         info_keys = [key.replace('info_', '') for key in self.input_dims.keys() if key.startswith('info_')]
-        info_values = [np.empty((self.T - 1, 1, self.input_dims['info_' + key]), np.float32) for key in info_keys]
+        info_values = [
+            np.empty((self.T - 1, 1, self.input_dims[f'info_{key}']), np.float32)
+            for key in info_keys
+        ]
+
 
         demo_data_obs = demoData['obs']
         demo_data_acs = demoData['acs']
         demo_data_info = demoData['info']
 
+        i = 0
         for epsd in range(self.num_demo): # we initialize the whole demo buffer at the start of the training
             obs, acts, goals, achieved_goals = [], [] ,[] ,[]
-            i = 0
             for transition in range(self.T - 1):
                 obs.append([demo_data_obs[epsd][transition].get('observation')])
                 acts.append([demo_data_acs[epsd][transition]])
@@ -187,7 +190,7 @@ class DDPG(object):
                            g=goals,
                            ag=achieved_goals)
             for key, value in zip(info_keys, info_values):
-                episode['info_{}'.format(key)] = value
+                episode[f'info_{key}'] = value
 
             episode = convert_episode_to_batch_major(episode)
             global DEMO_BUFFER
@@ -278,8 +281,7 @@ class DDPG(object):
         transitions['o'], transitions['g'] = self._preprocess_og(o, ag, g)
         transitions['o_2'], transitions['g_2'] = self._preprocess_og(o_2, ag_2, g)
 
-        transitions_batch = [transitions[key] for key in self.stage_shapes.keys()]
-        return transitions_batch
+        return [transitions[key] for key in self.stage_shapes.keys()]
 
     def stage_batch(self, batch=None):
         if batch is None:
@@ -304,13 +306,17 @@ class DDPG(object):
         self.buffer.clear_buffer()
 
     def _vars(self, scope):
-        res = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.scope + '/' + scope)
+        res = tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES, scope=f'{self.scope}/{scope}'
+        )
+
         assert len(res) > 0
         return res
 
     def _global_vars(self, scope):
-        res = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope + '/' + scope)
-        return res
+        return tf.get_collection(
+            tf.GraphKeys.GLOBAL_VARIABLES, scope=f'{self.scope}/{scope}'
+        )
 
     def _create_network(self, reuse=False):
         logger.info("Creating a DDPG agent with action space %d x %s..." % (self.dimu, self.max_u))

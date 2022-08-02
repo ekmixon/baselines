@@ -152,8 +152,11 @@ def boolean_flag(parser, name, default=False, help=None):
         help string for the flag
     """
     dest = name.replace('-', '_')
-    parser.add_argument("--" + name, action="store_true", default=default, dest=dest, help=help)
-    parser.add_argument("--no-" + name, action="store_false", dest=dest)
+    parser.add_argument(
+        f"--{name}", action="store_true", default=default, dest=dest, help=help
+    )
+
+    parser.add_argument(f"--no-{name}", action="store_false", dest=dest)
 
 
 def get_wrapper_by_name(env, classname):
@@ -204,7 +207,7 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
     compression: bool
         if true pickle will be compressed
     """
-    temp_storage = path + ".relatively_safe"
+    temp_storage = f"{path}.relatively_safe"
     if compression:
         # Using gzip here would be simpler, but the size is limited to 2GB
         with tempfile.NamedTemporaryFile() as uncompressed_file:
